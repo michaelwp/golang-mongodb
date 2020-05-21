@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"net/http"
+	"strings"
 )
 
 /*
@@ -47,6 +49,10 @@ func addUser(w http.ResponseWriter, r *http.Request){
 	} else {
 		mongoDB := mongoDB()
 
+		u.Email = strings.ToLower(u.Email)
+		u.FirstName = strings.ToLower(u.FirstName)
+		u.LastName = strings.ToLower(u.LastName)
+
 		_, err := mongoDB.Collection("tbl_user").InsertOne(context.TODO(), u)
 		if err != nil {
 			log.Println(err)
@@ -67,19 +73,25 @@ func addUser(w http.ResponseWriter, r *http.Request){
 /*
 	=====================================================
 	View Users [GET]
-	All users : http://localhost:8080/user
-	spesific user : http://localhost:8080/user/{email}
+	all users : http://localhost:8080/user
+	spesific user : http://localhost:8080/user/{firstname}
 	=====================================================
 */
 func viewUser(w http.ResponseWriter, r *http.Request){
 	var u []User
 	var resp Response
+	vars := mux.Vars(r)
+	filter := bson.D{{"firstname", strings.ToLower(vars["firstname"])}}
+
+	if len(vars) <= 0 {
+		filter = bson.D{{}}
+	}
 
 	w.Header().Set("Content-type", "application/json")
 
 	mongoDB := mongoDB()
 
-	cur, err := mongoDB.Collection("tbl_user").Find(context.TODO(), bson.D{})
+	cur, err := mongoDB.Collection("tbl_user").Find(context.TODO(), filter)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -103,6 +115,37 @@ func viewUser(w http.ResponseWriter, r *http.Request){
 	resp.Status = 1
 	resp.Message = "List of User"
 	resp.Data = u
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+/*
+	=====================================================
+	Find User [GET]
+	http://localhost:8080/user/{email}
+	=====================================================
+*/
+func findUser(w http.ResponseWriter, r *http.Request){
+	var resp ResponseOne
+	var uRes User
+	vars := mux.Vars(r)
+	filter := bson.D{{"email", strings.ToLower(vars["email"])}}
+
+	fmt.Println(strings.ToLower(vars["email"]))
+
+	w.Header().Set("Content-type", "application/json")
+
+	mongoDB := mongoDB()
+
+	err := mongoDB.Collection("tbl_user").FindOne(context.TODO(), filter).Decode(&uRes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp.Status = 1
+	resp.Message = "User data"
+	resp.Data = uRes
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
