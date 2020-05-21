@@ -13,3 +13,9 @@ type Response struct {
 	Message string `json:"message"`
 	Data    []User
 }
+
+type ResponseOne struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+	Data    User
+}
