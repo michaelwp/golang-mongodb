@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
 	"strings"
@@ -163,9 +164,43 @@ func findEmail(email string) User {
 	var uRes User
 	mongoDB := mongoDB()
 
-	filter := bson.D{{"email", strings.ToLower(email)}}
+	filter := bson.M{"email": strings.ToLower(email)}
 	err := mongoDB.Collection("tbl_user").FindOne(context.TODO(), filter).Decode(&uRes)
 	if err != nil {log.Println(err)}
 
 	return uRes
+}
+
+/*
+	=====================================================
+	Delete User [DELETE]
+	http://localhost:8080/user/{id}
+	=====================================================
+*/
+func deleteUser(w http.ResponseWriter, r *http.Request){
+	var resp Response
+	vars := mux.Vars(r)
+
+	w.Header().Set("Content-type", "application/json")
+
+	resp.Status = 1
+	resp.Message = "User successfully deleted"
+
+	idPrimitive, err := primitive.ObjectIDFromHex(vars["id"])
+
+	filter := bson.M{"_id": idPrimitive}
+
+	mongoDB := mongoDB()
+	delResult, err := mongoDB.Collection("tbl_user").DeleteOne(context.TODO(), filter)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if delResult.DeletedCount <= 0 {
+		resp.Status = 0
+		resp.Message = "User failed to delete"
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	_ = json.NewEncoder(w).Encode(resp)
 }
