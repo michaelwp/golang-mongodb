@@ -36,34 +36,47 @@ func home(w http.ResponseWriter, r *http.Request){
 func addUser(w http.ResponseWriter, r *http.Request){
 	var u User
 	var resp Response
+	errMsg := "Data failed to register"
 
 	w.Header().Set("Content-Type", "application/json")
+
+	resp.Status = 1
+	resp.Message = "Data successfully added"
 
 	err := json.NewDecoder(r.Body).Decode(&u)
 	if err != nil {
 		log.Println(err)
 
 		resp.Status = 0
-		resp.Message = "Data failed added"
+		resp.Message = errMsg
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
-		mongoDB := mongoDB()
+		uRes := findEmail(u.Email)
 
-		u.Email = strings.ToLower(u.Email)
-		u.FirstName = strings.ToLower(u.FirstName)
-		u.LastName = strings.ToLower(u.LastName)
-
-		_, err := mongoDB.Collection("tbl_user").InsertOne(context.TODO(), u)
-		if err != nil {
-			log.Println(err)
-
+		if uRes.Email != "" {
 			resp.Status = 0
-			resp.Message = "Data failed added"
+			resp.Message = "Email already registered"
 			w.WriteHeader(http.StatusBadRequest)
 		} else {
-			resp.Status = 1
-			resp.Message = "Data successfully added"
-			w.WriteHeader(http.StatusOK)
+			mongoDB := mongoDB()
+
+			pass := genHash(u.Password)
+
+			inputData := bson.D{
+				{"firstname", strings.ToLower(u.FirstName)},
+				{"lastname", strings.ToLower(u.LastName)},
+				{"email", strings.ToLower(u.Email)},
+				{"password", pass},
+			}
+
+			_, err := mongoDB.Collection("tbl_user").InsertOne(context.TODO(), inputData)
+			if err != nil {
+				log.Println(err)
+
+				resp.Status = 0
+				resp.Message = errMsg
+				w.WriteHeader(http.StatusBadRequest)
+			}
 		}
 	}
 
@@ -83,18 +96,14 @@ func viewUser(w http.ResponseWriter, r *http.Request){
 	vars := mux.Vars(r)
 	filter := bson.D{{"firstname", strings.ToLower(vars["firstname"])}}
 
-	if len(vars) <= 0 {
-		filter = bson.D{{}}
-	}
+	if len(vars) <= 0 {filter = bson.D{{}}}
 
 	w.Header().Set("Content-type", "application/json")
 
 	mongoDB := mongoDB()
 
 	cur, err := mongoDB.Collection("tbl_user").Find(context.TODO(), filter)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil {log.Fatal(err)}
 
 	for cur.Next(context.TODO()) {
 		var el = User{}
@@ -106,9 +115,7 @@ func viewUser(w http.ResponseWriter, r *http.Request){
 		u = append(u, el)
 	}
 
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
+	if err := cur.Err(); err != nil {log.Fatal(err)}
 
 	_ = cur.Close(context.TODO())
 
@@ -128,25 +135,37 @@ func viewUser(w http.ResponseWriter, r *http.Request){
 */
 func findUser(w http.ResponseWriter, r *http.Request){
 	var resp ResponseOne
-	var uRes User
 	vars := mux.Vars(r)
-	filter := bson.D{{"email", strings.ToLower(vars["email"])}}
-
-	fmt.Println(strings.ToLower(vars["email"]))
 
 	w.Header().Set("Content-type", "application/json")
 
-	mongoDB := mongoDB()
-
-	err := mongoDB.Collection("tbl_user").FindOne(context.TODO(), filter).Decode(&uRes)
-	if err != nil {
-		log.Fatal(err)
-	}
+	uRes := findEmail(vars["email"])
 
 	resp.Status = 1
 	resp.Message = "User data"
 	resp.Data = uRes
 
-	w.WriteHeader(http.StatusOK)
+	if uRes.Email == "" {
+		resp.Status = 0
+		resp.Message = "Data not found"
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+/*
+	=====================================================
+	Find Email (for checking if email already registered)
+	=====================================================
+*/
+func findEmail(email string) User {
+	var uRes User
+	mongoDB := mongoDB()
+
+	filter := bson.D{{"email", strings.ToLower(email)}}
+	err := mongoDB.Collection("tbl_user").FindOne(context.TODO(), filter).Decode(&uRes)
+	if err != nil {log.Println(err)}
+
+	return uRes
 }
