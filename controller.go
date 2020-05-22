@@ -192,13 +192,55 @@ func deleteUser(w http.ResponseWriter, r *http.Request){
 
 	mongoDB := mongoDB()
 	delResult, err := mongoDB.Collection("tbl_user").DeleteOne(context.TODO(), filter)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil {log.Fatal(err)}
 
 	if delResult.DeletedCount <= 0 {
 		resp.Status = 0
 		resp.Message = "User failed to delete"
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+/*
+	=====================================================
+	Update User [PUT]
+	http://localhost:8080/user/{id}
+	request body : {
+		"first_name": "John",
+		"last_name": "Doe",
+	}
+	=====================================================
+*/
+func updateUser(w http.ResponseWriter, r *http.Request){
+	var u User
+	var resp Response
+	vars := mux.Vars(r)
+
+	w.Header().Set("Content-type", "application/json")
+
+	err := json.NewDecoder(r.Body).Decode(&u)
+	if err != nil {log.Fatal(err)}
+
+	resp.Status = 1
+	resp.Message = "User successfully updated"
+
+	idPrimitive, err := primitive.ObjectIDFromHex(vars["id"])
+
+	filter := bson.M{"_id": idPrimitive}
+	update := bson.M{"$set": bson.M{
+		"firstname": strings.ToLower(u.FirstName),
+		"lastname":  strings.ToLower(u.LastName),
+	},}
+
+	mongoDB := mongoDB()
+	updResult, err := mongoDB.Collection("tbl_user").UpdateOne(context.TODO(), filter, update)
+	if err != nil {log.Fatal(err)}
+
+	if updResult.ModifiedCount <= 0 {
+		resp.Status = 0
+		resp.Message = "User failed to update"
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
