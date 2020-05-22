@@ -10,6 +10,7 @@ func router() *mux.Router {
 	router.HandleFunc("/user/{firstname}", viewUser).Methods("GET")
 	router.HandleFunc("/user/email/{email}", findUser).Methods("GET")
 	router.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
+	router.HandleFunc("/user/{id}", updateUser).Methods("PUT")
 
 	return router
 }
